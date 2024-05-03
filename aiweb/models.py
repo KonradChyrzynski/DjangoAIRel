@@ -8,6 +8,12 @@ from tensorflow.keras.preprocessing import image as tf_image
 from tensorflow.keras.applications.inception_v3 import InceptionV3, preprocess_input, decode_predictions
 # Importuje moduł numpy i przypisuje mu alias np
 from django.core.files.base import ContentFile  # Importuje klasę ContentFile z django.core.files.base
+
+# Importuję pipeline z transformers, pipeline odpowiada za:
+# Przetwarzanie zawartości tekstowej na input numeryczny
+# Dokonuje predykcji na podstawie modelu GPT-2
+# Konwertuje output numeryczny na tekst
+from transformers import pipeline
 import numpy as np
 
 # Create your models here.
@@ -17,6 +23,7 @@ class Article(models.Model):
     title = models.CharField(max_length=255, blank=True)
     content = models.TextField(blank=True)
     photo = models.ImageField(upload_to="mediaphoto", blank=True, null=True)
+    articleBlogPostContent = models.TextField(blank=True)
 
     def __str__(self):
         return self.title
@@ -45,13 +52,18 @@ class Article(models.Model):
                     decoded_predictions = decode_predictions(predictions, top=1)[0]
                     # Wybiera najbardziej prawdopodobną etykietę
                     best_guess = decoded_predictions[0][1]
+                    best_guess_space = best_guess.replace('_', ' ')
                     # Ustawia tytuł na najbardziej prawdopodobną etykietę
                     self.title = best_guess
                     # Tworzy łańcuch znaków zawierający etykiety i prawdopodobieństwa predykcji
                     self.content = ', '.join([f"{pred[1]}: {pred[2] * 100:.2f}%" for pred in decoded_predictions])
+
+                    generator = pipeline(task='text-generation', model='gpt2')
+                    outp = generator(f"It takes time to write a good blog post about {best_guess_space}", max_length=30, num_return_sequences=1)
+                    self.articleBlogPostContent = outp[0]['generated_text']
+
                     super().save(*args, **kwargs)
 
-            except Exception as e:  # Obsługuje wyjątek
+            except Exception:  # Obsługuje wyjątek
                 # Nic nie robi w przypadku wystąpienia wyjątku
                 pass
-
